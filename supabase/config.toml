@@ -1,0 +1,10 @@
+project_id = "cdaecuhvmijvuilsbefk"
+
+[functions.generate-goal-plan]
+verify_jwt = true
+
+[functions.check-premium-status]
+verify_jwt = true
+
+[functions.ai-doubt-solver]
+verify_jwt = true

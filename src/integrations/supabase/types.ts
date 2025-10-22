@@ -167,6 +167,7 @@ export type Database = {
             | Database["public"]["Enums"]["subscription_tier"]
             | null
           total_xp: number | null
+          trial_ends_at: string | null
           updated_at: string | null
         }
         Insert: {
@@ -183,6 +184,7 @@ export type Database = {
             | Database["public"]["Enums"]["subscription_tier"]
             | null
           total_xp?: number | null
+          trial_ends_at?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -199,6 +201,7 @@ export type Database = {
             | Database["public"]["Enums"]["subscription_tier"]
             | null
           total_xp?: number | null
+          trial_ends_at?: string | null
           updated_at?: string | null
         }
         Relationships: []
@@ -397,7 +400,10 @@ export type Database = {
       }
     }
     Functions: {
-      [_ in never]: never
+      user_has_premium_access: {
+        Args: { user_id_param: string }
+        Returns: boolean
+      }
     }
     Enums: {
       goal_status: "active" | "completed" | "paused" | "abandoned"

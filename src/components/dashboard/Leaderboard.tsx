@@ -55,6 +55,7 @@ export const Leaderboard = () => {
   };
 
   const isPremium = premiumStatus?.isPremium;
+  const inFreeTrial = premiumStatus?.inFreeTrial;
 
   if (loading) {
     return <Card className="p-6">Loading leaderboard...</Card>;
@@ -67,7 +68,12 @@ export const Leaderboard = () => {
           <TrendingUp className="h-5 w-5 text-primary" />
           Global Leaderboard
         </h3>
-        {!isPremium && (
+        {inFreeTrial && (
+          <Badge variant="secondary" className="gap-1">
+            🎁 Free Trial Active
+          </Badge>
+        )}
+        {!isPremium && !inFreeTrial && (
           <Badge variant="secondary" className="gap-1">
             <Crown className="h-3 w-3" />
             Premium Only

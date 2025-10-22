@@ -27,7 +27,7 @@ serve(async (req) => {
     // Get user profile
     const { data: profile, error: profileError } = await supabaseClient
       .from('profiles')
-      .select('subscription_tier, subscription_expires_at')
+      .select('subscription_tier, subscription_expires_at, trial_ends_at')
       .eq('id', user.id)
       .single();
 
@@ -35,9 +35,15 @@ serve(async (req) => {
       throw new Error('Failed to fetch profile');
     }
 
-    // Check if premium and not expired
-    const isPremium = profile.subscription_tier === 'premium' && 
+    // Check if premium (paid subscription) and not expired
+    const hasPaidPremium = profile.subscription_tier === 'premium' && 
       (profile.subscription_expires_at ? new Date(profile.subscription_expires_at) > new Date() : false);
+    
+    // Check if in free trial period
+    const inFreeTrial = profile.trial_ends_at ? new Date(profile.trial_ends_at) > new Date() : false;
+    
+    // User has premium access if they have paid subscription OR are in free trial
+    const isPremium = hasPaidPremium || inFreeTrial;
 
     // Get active subscription details
     let subscription = null;
@@ -59,6 +65,8 @@ serve(async (req) => {
         isPremium,
         tier: profile.subscription_tier,
         expiresAt: profile.subscription_expires_at,
+        trialEndsAt: profile.trial_ends_at,
+        inFreeTrial,
         subscription
       }),
       {

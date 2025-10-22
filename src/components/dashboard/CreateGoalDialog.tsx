@@ -44,7 +44,7 @@ export const CreateGoalDialog = ({ onGoalCreated }: CreateGoalDialogProps) => {
       const endDate = new Date(startDate);
       endDate.setDate(endDate.getDate() + durationDays);
 
-      const { error } = await supabase.from("goals").insert({
+      const { data: goalData, error: goalError } = await supabase.from("goals").insert({
         user_id: user.id,
         title,
         description,
@@ -55,11 +55,31 @@ export const CreateGoalDialog = ({ onGoalCreated }: CreateGoalDialogProps) => {
         duration_days: durationDays,
         intensity_level: intensityLevel,
         status: "active",
+        ai_generated: false,
+      }).select().single();
+
+      if (goalError) throw goalError;
+
+      // Create basic daily tasks
+      const dailyTasks = [];
+      for (let i = 0; i < durationDays; i++) {
+        const taskDate = new Date(startDate);
+        taskDate.setDate(taskDate.getDate() + i);
+        dailyTasks.push({
+          day: i + 1,
+          title: `Day ${i + 1}: ${title}`,
+          description: `Complete your daily task for ${title}`,
+        });
+      }
+
+      await supabase.functions.invoke("create-tasks", {
+        body: {
+          goalId: goalData.id,
+          tasks: dailyTasks,
+        },
       });
 
-      if (error) throw error;
-
-      toast({ title: "Success!", description: "Goal created successfully" });
+      toast({ title: "Success!", description: `Goal created with ${durationDays} daily tasks` });
       setOpen(false);
       resetForm();
       onGoalCreated?.();
@@ -79,7 +99,11 @@ export const CreateGoalDialog = ({ onGoalCreated }: CreateGoalDialogProps) => {
 
     setAiLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("generate-goal-plan", {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      // Step 1: Generate AI plan
+      const { data: aiData, error: aiError } = await supabase.functions.invoke("generate-goal-plan", {
         body: {
           goalType,
           duration: durationDays,
@@ -88,15 +112,46 @@ export const CreateGoalDialog = ({ onGoalCreated }: CreateGoalDialogProps) => {
         },
       });
 
-      if (error) throw error;
+      if (aiError) throw aiError;
+
+      // Step 2: Create the goal
+      const endDate = new Date(startDate);
+      endDate.setDate(endDate.getDate() + durationDays);
+
+      const { data: goalData, error: goalError } = await supabase.from("goals").insert({
+        user_id: user.id,
+        title,
+        description,
+        goal_type: goalType,
+        verification_mode: verificationMode,
+        start_date: startDate.toISOString().split('T')[0],
+        end_date: endDate.toISOString().split('T')[0],
+        duration_days: durationDays,
+        intensity_level: intensityLevel,
+        status: "active",
+        ai_generated: true,
+      }).select().single();
+
+      if (goalError) throw goalError;
+
+      // Step 3: Create tasks from AI plan
+      const { error: tasksError } = await supabase.functions.invoke("create-tasks", {
+        body: {
+          goalId: goalData.id,
+          tasks: aiData.tasks,
+        },
+      });
+
+      if (tasksError) throw tasksError;
 
       toast({ 
-        title: "AI Plan Generated!", 
-        description: `Created ${data.tasks.length} tasks for your goal`,
+        title: "Success!", 
+        description: `AI created your goal with ${aiData.tasks.length} daily tasks`,
       });
       
-      // Create goal and tasks
-      await handleCreateGoal();
+      setOpen(false);
+      resetForm();
+      onGoalCreated?.();
     } catch (error) {
       console.error("Error generating AI plan:", error);
       toast({ title: "Error", description: "Failed to generate AI plan", variant: "destructive" });

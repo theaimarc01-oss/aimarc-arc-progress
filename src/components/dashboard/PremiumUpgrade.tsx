@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Crown, Check, Sparkles } from "lucide-react";
@@ -13,7 +13,34 @@ declare global {
 
 export const PremiumUpgrade = () => {
   const [loading, setLoading] = useState(false);
+  const [trialInfo, setTrialInfo] = useState<{ daysLeft: number; inTrial: boolean } | null>(null);
   const { toast } = useToast();
+
+  useEffect(() => {
+    fetchTrialInfo();
+  }, []);
+
+  const fetchTrialInfo = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("trial_ends_at")
+        .eq("id", user.id)
+        .single();
+
+      if (profile?.trial_ends_at) {
+        const trialEnd = new Date(profile.trial_ends_at);
+        const now = new Date();
+        const daysLeft = Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        setTrialInfo({ daysLeft: Math.max(0, daysLeft), inTrial: daysLeft > 0 });
+      }
+    } catch (error) {
+      console.error("Error fetching trial info:", error);
+    }
+  };
 
   const loadRazorpayScript = () => {
     return new Promise((resolve) => {
@@ -105,17 +132,28 @@ export const PremiumUpgrade = () => {
 
   return (
     <Card className="p-6 bg-gradient-to-br from-secondary/10 via-primary/5 to-accent/10 border-secondary/20">
+      {trialInfo?.inTrial && (
+        <div className="mb-4 p-3 rounded-lg bg-success/10 border border-success/20">
+          <p className="text-sm font-semibold text-success flex items-center gap-2">
+            🎁 Free Trial Active - {trialInfo.daysLeft} days remaining
+          </p>
+        </div>
+      )}
+      
       <div className="flex items-start gap-4 mb-6">
         <div className="p-3 rounded-lg bg-secondary/20">
           <Crown className="h-6 w-6 text-secondary" />
         </div>
         <div className="flex-1">
           <h3 className="text-xl font-bold mb-2 flex items-center gap-2">
-            Upgrade to Premium
+            {trialInfo?.inTrial ? "Enjoying Premium?" : "Upgrade to Premium"}
             <Sparkles className="h-5 w-5 text-secondary" />
           </h3>
           <p className="text-sm text-muted-foreground">
-            Unlock advanced features and maximize your goal achievement
+            {trialInfo?.inTrial 
+              ? `Continue with premium after your trial ends in ${trialInfo.daysLeft} days`
+              : "Unlock advanced features and maximize your goal achievement"
+            }
           </p>
         </div>
       </div>

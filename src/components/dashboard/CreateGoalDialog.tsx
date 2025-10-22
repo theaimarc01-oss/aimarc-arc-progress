@@ -26,8 +26,12 @@ export const CreateGoalDialog = ({ onGoalCreated }: CreateGoalDialogProps) => {
   const [goalType, setGoalType] = useState<"fitness" | "learning" | "exam" | "seasonal">("fitness");
   const [verificationMode, setVerificationMode] = useState<"normal" | "strict">("normal");
   const [startDate, setStartDate] = useState<Date>(new Date());
-  const [durationDays, setDurationDays] = useState(30);
-  const [intensityLevel, setIntensityLevel] = useState(3);
+  const [endDate, setEndDate] = useState<Date>(() => {
+    const date = new Date();
+    date.setDate(date.getDate() + 30);
+    return date;
+  });
+  const [intensity, setIntensity] = useState<"easy" | "hard">("easy");
   const { toast } = useToast();
 
   const handleCreateGoal = async () => {
@@ -36,13 +40,18 @@ export const CreateGoalDialog = ({ onGoalCreated }: CreateGoalDialogProps) => {
       return;
     }
 
+    if (endDate <= startDate) {
+      toast({ title: "Error", description: "End date must be after start date", variant: "destructive" });
+      return;
+    }
+
     setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      const endDate = new Date(startDate);
-      endDate.setDate(endDate.getDate() + durationDays);
+      const durationDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+      const intensityLevel = intensity === "easy" ? 1 : 5;
 
       const { data: goalData, error: goalError } = await supabase.from("goals").insert({
         user_id: user.id,
@@ -97,10 +106,18 @@ export const CreateGoalDialog = ({ onGoalCreated }: CreateGoalDialogProps) => {
       return;
     }
 
+    if (endDate <= startDate) {
+      toast({ title: "Error", description: "End date must be after start date", variant: "destructive" });
+      return;
+    }
+
     setAiLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
+
+      const durationDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+      const intensityLevel = intensity === "easy" ? 1 : 5;
 
       // Step 1: Generate AI plan
       const { data: aiData, error: aiError } = await supabase.functions.invoke("generate-goal-plan", {
@@ -115,9 +132,6 @@ export const CreateGoalDialog = ({ onGoalCreated }: CreateGoalDialogProps) => {
       if (aiError) throw aiError;
 
       // Step 2: Create the goal
-      const endDate = new Date(startDate);
-      endDate.setDate(endDate.getDate() + durationDays);
-
       const { data: goalData, error: goalError } = await supabase.from("goals").insert({
         user_id: user.id,
         title,
@@ -166,8 +180,10 @@ export const CreateGoalDialog = ({ onGoalCreated }: CreateGoalDialogProps) => {
     setGoalType("fitness");
     setVerificationMode("normal");
     setStartDate(new Date());
-    setDurationDays(30);
-    setIntensityLevel(3);
+    const newEndDate = new Date();
+    newEndDate.setDate(newEndDate.getDate() + 30);
+    setEndDate(newEndDate);
+    setIntensity("easy");
   };
 
   return (
@@ -236,43 +252,59 @@ export const CreateGoalDialog = ({ onGoalCreated }: CreateGoalDialogProps) => {
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label>Start Date</Label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" className="w-full justify-start text-left font-normal">
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {format(startDate, "PPP")}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0">
-                <Calendar mode="single" selected={startDate} onSelect={(date) => date && setStartDate(date)} />
-              </PopoverContent>
-            </Popover>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Start Date</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-full justify-start text-left font-normal">
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {format(startDate, "PPP")}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar 
+                    mode="single" 
+                    selected={startDate} 
+                    onSelect={(date) => date && setStartDate(date)}
+                    disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <div className="space-y-2">
+              <Label>End Date</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-full justify-start text-left font-normal">
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {format(endDate, "PPP")}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar 
+                    mode="single" 
+                    selected={endDate} 
+                    onSelect={(date) => date && setEndDate(date)}
+                    disabled={(date) => date <= startDate}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
           </div>
 
           <div className="space-y-2">
-            <Label>Duration: {durationDays} days</Label>
-            <Slider
-              value={[durationDays]}
-              onValueChange={([v]) => setDurationDays(v)}
-              min={7}
-              max={365}
-              step={1}
-              className="w-full"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Intensity Level: {intensityLevel}/5</Label>
-            <Slider
-              value={[intensityLevel]}
-              onValueChange={([v]) => setIntensityLevel(v)}
-              min={1}
-              max={5}
-              step={1}
-              className="w-full"
-            />
+            <Label>Intensity Level</Label>
+            <Select value={intensity} onValueChange={(v: any) => setIntensity(v)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="easy">✅ Easy (Free)</SelectItem>
+                <SelectItem value="hard">🔥 Hard (Premium)</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
 

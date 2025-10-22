@@ -40,21 +40,27 @@ serve(async (req) => {
 
     // Prepare tasks for insertion
     const startDate = new Date(goal.start_date);
-    const tasksToInsert = tasks.map((task: any, index: number) => {
-      const scheduledDate = new Date(startDate);
-      scheduledDate.setDate(scheduledDate.getDate() + (task.day || index));
+    const durationDays = goal.duration_days ?? 0;
 
-      return {
-        user_id: user.id,
-        goal_id: goalId,
-        title: task.title,
-        description: task.description || '',
-        scheduled_date: scheduledDate.toISOString().split('T')[0],
-        status: 'pending',
-        verified: false,
-        xp_earned: 0,
-      };
-    });
+    const tasksToInsert = (tasks as any[])
+      .map((task: any, index: number) => {
+        const dayOffset = typeof task.day === 'number' ? Math.max(0, task.day - 1) : index;
+        const scheduledDate = new Date(startDate);
+        scheduledDate.setDate(scheduledDate.getDate() + dayOffset);
+
+        return {
+          user_id: user.id,
+          goal_id: goalId,
+          title: task.title,
+          description: task.description || '',
+          scheduled_date: scheduledDate.toISOString().split('T')[0],
+          status: 'pending',
+          verified: false,
+          xp_earned: 0,
+        };
+      })
+      // Ensure we don't exceed the goal duration if provided
+      .filter((_, idx) => durationDays ? idx < durationDays : true);
 
     // Insert tasks
     const { data: insertedTasks, error: insertError } = await supabaseClient
